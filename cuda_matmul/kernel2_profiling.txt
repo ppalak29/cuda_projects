@@ -1,0 +1,102 @@
+A100 Metrics:
+Compute Limit: 19,500 GFLOPs
+Memory Limit: 2,000 GB/s
+
+MY Analysis:
+    FLOPS = 2 * 4096 ^ 3 = 137 billion GFLOPS
+    Time = 47.51 ms
+    Performance = 137B / 0.04751 = 2884 GFLOPS
+    This is 226 / 19500 = 14.8% of peak capacity (better than kernel 1)
+
+Fixes compared to kernel 1:
+- Better coalescing - 12.5% → 82.5%: Warp threads now access consecutive memory (same row, adjacent columns)
+- More balanced workload - Memory 77%, Compute 77% and GPU actually computing, not just waiting
+- Less DRAM traffic - 8.75 GB → 71.6 MB with better cache utilization
+
+Key Issues:
+- No data reuse. Threads still load same data independently from cache. global memory access expensive
+- Still memory-bound - 77% memory throughput (need to reduce further)
+- Large working set - Doesn't fit in cache, causing misses
+
+~~~~~~~~~~~~~~~~~
+
+Section: GPU Speed Of Light Throughput
+    ----------------------- ----------- ------------
+    Metric Name             Metric Unit Metric Value
+    ----------------------- ----------- ------------
+    DRAM Frequency                  Ghz         1.21
+    SM Frequency                    Ghz         1.09
+    Elapsed Cycles                cycle     52010460
+    Memory Throughput                 %        76.55 (much better not as saturated as kernel 1)
+    DRAM Throughput                   %         0.10
+    Duration                         ms        47.51 (significant reduction from kernel1, 12.8x improvement)
+    L1/TEX Cache Throughput           %        76.84
+    L2 Cache Throughput               %         3.46
+    SM Active Cycles              cycle  51778467.83
+    Compute (SM) Throughput           %        76.54 (GPU cores are now actually doing work yay!)
+    ----------------------- ----------- ------------
+
+    INF   Compute and Memory are well-balanced: To reduce runtime, both computation and memory traffic must be reduced. 
+          Check both the Compute Workload Analysis and Memory Workload Analysis sections.                               
+
+    Section: Launch Statistics
+    -------------------------------- --------------- ---------------
+    Metric Name                          Metric Unit    Metric Value
+    -------------------------------- --------------- ---------------
+    Block Size                                                  1024
+    Function Cache Configuration                     CachePreferNone
+    Grid Size                                                  16384
+    Registers Per Thread             register/thread              32
+    Shared Memory Configuration Size           Kbyte            8.19
+    Driver Shared Memory Per Block       Kbyte/block            1.02
+    Dynamic Shared Memory Per Block       byte/block               0
+    Static Shared Memory Per Block        byte/block               0
+    # SMs                                         SM             108
+    Stack Size                                                  1024
+    Threads                                   thread        16777216
+    # TPCs                                                        54
+    Enabled TPC IDs                                              all
+    Uses Green Context                                             0
+    Waves Per SM                                               75.85
+    -------------------------------- --------------- ---------------
+
+    Section: Occupancy
+    ------------------------------- ----------- ------------
+    Metric Name                     Metric Unit Metric Value
+    ------------------------------- ----------- ------------
+    Block Limit SM                        block           32
+    Block Limit Registers                 block            2
+    Block Limit Shared Mem                block            8
+    Block Limit Warps                     block            2
+    Theoretical Active Warps per SM        warp           64
+    Theoretical Occupancy                     %          100
+    Achieved Occupancy                        %        99.53
+    Achieved Active Warps Per SM           warp        63.70
+    ------------------------------- ----------- ------------
+
+    Section: GPU and Memory Workload Distribution
+    -------------------------- ----------- ------------
+    Metric Name                Metric Unit Metric Value
+    -------------------------- ----------- ------------
+    Average DRAM Active Cycles       cycle     58910.20
+    Total DRAM Elapsed Cycles        cycle   2308834816
+    Average L1 Active Cycles         cycle  51778467.83
+    Total L1 Elapsed Cycles          cycle   5613459582
+    Average L2 Active Cycles         cycle  26814652.70
+    Total L2 Elapsed Cycles          cycle   3988299760
+    Average SM Active Cycles         cycle  51778467.83
+    Total SM Elapsed Cycles          cycle   5613459582
+    Average SMSP Active Cycles       cycle  51780726.46
+    Total SMSP Elapsed Cycles        cycle  22453838328
+    -------------------------- ----------- ------------
+
+Section: Command line profiler metrics
+    ------------------------------------------------------------- ----------- ------------
+    Metric Name                                                   Metric Unit Metric Value
+    ------------------------------------------------------------- ----------- ------------
+    dram__bytes_read.sum                                                Mbyte        71.64 (less dram reads since cache is being utilized more efficiently. with coalesced access cache hit rate higher so less reading from dram)
+    dram__bytes_write.sum                                               Mbyte         3.91
+    gpu__time_duration.sum                                                 ms        47.52
+    smsp__sass_average_data_bytes_per_sector_mem_global_op_ld.pct           %        82.50 (5/6 data fetched is used. memory coalescing improvement!)
+    ------------------------------------------------------------- ----------- ------------
+

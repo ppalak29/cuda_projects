@@ -1,0 +1,99 @@
+A100 Metrics:
+Compute Limit: 19,500 GFLOPs (we're at 1% not good)
+Memory Limit: 2,000 GB/s   (we're hitting this)
+
+MY Analysis:
+    FLOPS = 2 * 4096 ^ 3 = 137 billion GFLOPS
+    Time - 606.02 ms
+    Performance = 137B / 0.60602 = 226 GFLOPS
+    A100 capacity peak is 19500 GFLOPS
+    This is 226 / 19500 = 1.16% of peak capacity. Using 1% of A100 capability. 
+
+Key Issues
+- Memory-bound - Memory 99%, Compute 6%. The GPU sitting idle waiting for data
+- Poor coalescing - 12.5% efficiency. Threads in same warp access strided memory (4096 elements apart) and wasted 7/8 of memory bandwidth
+- L1 cache thrashing - 99% throughput, saturated. 2D thread mapping → warp threads compute different rows → non-contiguous memory access
+
+~~~~~~~~~~~~~~~
+
+Section: GPU Speed Of Light Throughput
+    ----------------------- ----------- ------------
+    Metric Name             Metric Unit Metric Value
+    ----------------------- ----------- ------------
+    DRAM Frequency                  Ghz         1.21
+    SM Frequency                    Ghz         1.09
+    Elapsed Cycles                cycle    663586813
+    Memory Throughput                 %        98.98 (MAJOR BOTTLENECK, MEMORY AT CAPACITY)
+    DRAM Throughput                   %         0.94
+    Duration                         ms       606.02 (time to do one matmul)
+    L1/TEX Cache Throughput           %        99.16 (MEMORY BOTTLENECK. lot of cache misses)
+    L2 Cache Throughput               %         1.55
+    SM Active Cycles              cycle 662043708.33
+    Compute (SM) Throughput           %         6.19 (COMPUTE UNITS ARE BARELY BEING USED. not achieveing max compute performance of A100. cores sitting idly)
+    ----------------------- ----------- ------------ 
+
+    INF   This workload is utilizing greater than 80.0% of the available compute or memory performance of the device.   
+          To further improve performance, work will likely need to be shifted from the most utilized to another unit.   
+          Start by analyzing L1 in the Memory Workload Analysis section.                                                
+
+    Section: Launch Statistics
+    -------------------------------- --------------- ---------------
+    Metric Name                          Metric Unit    Metric Value
+    -------------------------------- --------------- ---------------
+    Block Size                                                  1024
+    Function Cache Configuration                     CachePreferNone
+    Grid Size                                                  16384
+    Registers Per Thread             register/thread              32
+    Shared Memory Configuration Size           Kbyte            8.19
+    Driver Shared Memory Per Block       Kbyte/block            1.02
+    Dynamic Shared Memory Per Block       byte/block               0
+    Static Shared Memory Per Block        byte/block               0
+    # SMs                                         SM             108
+    Stack Size                                                  1024
+    Threads                                   thread        16777216
+    # TPCs                                                        54
+    Enabled TPC IDs                                              all
+    Uses Green Context                                             0
+    Waves Per SM                                               75.85
+    -------------------------------- --------------- ---------------
+
+    Section: Occupancy
+    ------------------------------- ----------- ------------
+    Metric Name                     Metric Unit Metric Value
+    ------------------------------- ----------- ------------
+    Block Limit SM                        block           32
+    Block Limit Registers                 block            2
+    Block Limit Shared Mem                block            8
+    Block Limit Warps                     block            2
+    Theoretical Active Warps per SM        warp           64
+    Theoretical Occupancy                     %          100
+    Achieved Occupancy                        %        97.88
+    Achieved Active Warps Per SM           warp        62.64
+    ------------------------------- ----------- ------------
+
+    Section: GPU and Memory Workload Distribution
+    -------------------------- ----------- ------------
+    Metric Name                Metric Unit Metric Value
+    -------------------------- ----------- ------------
+    Average DRAM Active Cycles       cycle   6887473.30
+    Total DRAM Elapsed Cycles        cycle  29452783360
+    Average L1 Active Cycles         cycle 662043708.33
+    Total L1 Elapsed Cycles          cycle  71632615404
+    Average L2 Active Cycles         cycle 499409011.07
+    Total L2 Elapsed Cycles          cycle  50902666240
+    Average SM Active Cycles         cycle 662043708.33
+    Total SM Elapsed Cycles          cycle  71632615404
+    Average SMSP Active Cycles       cycle 661940057.30
+    Total SMSP Elapsed Cycles        cycle 286530461616
+    -------------------------- ----------- ------------
+
+    Section: Command line profiler metrics
+    ------------------------------------------------------------- ----------- ------------
+    Metric Name                                                   Metric Unit Metric Value
+    ------------------------------------------------------------- ----------- ------------
+    dram__bytes_read.sum                                                Gbyte         8.75 (total reads expected in 549 GB so indicating some caching)
+    dram__bytes_write.sum                                               Mbyte        69.11
+    gpu__time_duration.sum                                                 ms       606.07
+    smsp__sass_average_data_bytes_per_sector_mem_global_op_ld.pct           %        12.50 (L1 cache maxes out. Only 1/8 data fetched is used. Poor memory coalescing, indicating a strided memory access pattern)
+    ------------------------------------------------------------- ----------- ------------
+
