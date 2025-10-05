@@ -1,0 +1,116 @@
+A100 Metrics:
+Compute Limit: 19,500 GFLOPs
+Memory Limit: 2,000 GB/s
+
+MY Analysis:
+    FLOPS = 2 * 4096 ^ 3 = 137 billion GFLOPS
+    Time = 33.30 ms
+    Performance = 137B / 0.0333 = 4,114 GFLOPS
+    This is 4,114 / 19500 = 21% of peak capacity (better than kernel 2)
+    Speedup: 1.43x vs Kernel 2 (not as good as expected)
+
+Occupancy Calculation:
+A100 SM Resources:
+- Max threads per SM: 2048
+- Max blocks per SM: 32
+- Max warps per SM: 64
+- Shared memory per SM: 164 KB
+- Registers per SM: 65,536
+
+Your kernel:
+- Threads per block: 1024
+- Warps per block: 1024/32 = 32
+- Shared memory per block: 8 KB
+- Registers per thread: 30
+
+Limiting factors:
+- Warps: 64 max warps / 32 warps per block = 2 blocks max
+- Shared memory: 164 KB / 8 KB = 20 blocks max
+- Registers: 65,536 / (1024 × 30) = 2.1 blocks max
+
+Can fit 2 blocks per SM, giving you 2 × 32 = 64 warps, achieving 99.62%. Occupancy is maxed out.
+
+Fixes:
+- tiling with shared memory (faster access, latency)
+- very good occupancy (meaning occupancy is not the bottleneck here!)
+- maintained coalescing from kernel 2
+- more useful work per load, data reuse
+
+Key Issues:
+- faster, but not as much as expected
+- still memory bound
+- high dram traffic
+- every iteration loading a new block from global memory (8 KB loaded per iteration, 128 iterations = 1 MB per block, 16,384 blocks)
+- need more work per global memory read and better use of thread registers. the problem isn't the tile size since occupacny is good
+
+Section: GPU Speed Of Light Throughput
+    ----------------------- ----------- ------------
+    Metric Name             Metric Unit Metric Value
+    ----------------------- ----------- ------------
+    DRAM Frequency                  Ghz         1.21
+    SM Frequency                    Ghz         1.09
+    Elapsed Cycles                cycle     36486666
+    Memory Throughput                 %        89.21 (higher than kernel 2 since all threads in block request to load from gmem at same time, creates traffic)
+    DRAM Throughput                   %        16.96 (this is the real bottleneck, working set might be too large)
+    Duration                         ms        33.30 (less latency than kernel 2)
+    L1/TEX Cache Throughput           %        89.48
+    L2 Cache Throughput               %        14.66
+    SM Active Cycles              cycle  36350944.01
+    Compute (SM) Throughput           %        75.03
+    ----------------------- ----------- ------------
+
+    INF   This workload is utilizing greater than 80.0% of the available compute or memory performance of the device.   
+          To further improve performance, work will likely need to be shifted from the most utilized to another unit.   
+          Start by analyzing L1 in the Memory Workload Analysis section.                                                
+
+    Section: Launch Statistics
+    -------------------------------- --------------- ---------------
+    Metric Name                          Metric Unit    Metric Value
+    -------------------------------- --------------- ---------------
+    Block Size                                                  1024
+    Function Cache Configuration                     CachePreferNone
+    Grid Size                                                  16384
+    Registers Per Thread             register/thread              30
+    Shared Memory Configuration Size           Kbyte           32.77
+    Driver Shared Memory Per Block       Kbyte/block            1.02
+    Dynamic Shared Memory Per Block       byte/block               0
+    Static Shared Memory Per Block       Kbyte/block            8.19 (32 * 32 * 2 * 4 bytes) per block
+    # SMs                                         SM             108
+    Stack Size                                                  1024
+    Threads                                   thread        16777216
+    # TPCs                                                        54
+    Enabled TPC IDs                                              all
+    Uses Green Context                                             0
+    Waves Per SM                                               75.85
+    -------------------------------- --------------- ---------------
+
+    Section: Occupancy
+    ------------------------------- ----------- ------------
+    Metric Name                     Metric Unit Metric Value
+    ------------------------------- ----------- ------------
+    Block Limit SM                        block           32
+    Block Limit Registers                 block            2
+    Block Limit Shared Mem                block            3
+    Block Limit Warps                     block            2
+    Theoretical Active Warps per SM        warp           64
+    Theoretical Occupancy                     %          100
+    Achieved Occupancy                        %        99.62 (very good occupancy)
+    Achieved Active Warps Per SM           warp        63.76
+    ------------------------------- ----------- ------------
+
+    Section: GPU and Memory Workload Distribution
+    -------------------------- ----------- ------------
+    Metric Name                Metric Unit Metric Value
+    -------------------------- ----------- ------------
+    Average DRAM Active Cycles       cycle   6860847.90
+    Total DRAM Elapsed Cycles        cycle   1618576128
+    Average L1 Active Cycles         cycle  36350944.01
+    Total L1 Elapsed Cycles          cycle   3937612132
+    Average L2 Active Cycles         cycle  34917888.17
+    Total L2 Elapsed Cycles          cycle   2796877440
+    Average SM Active Cycles         cycle  36350944.01
+    Total SM Elapsed Cycles          cycle   3937612132
+    Average SMSP Active Cycles       cycle  36347906.11
+    Total SMSP Elapsed Cycles        cycle  15750448528
+    -------------------------- ----------- ------------
+

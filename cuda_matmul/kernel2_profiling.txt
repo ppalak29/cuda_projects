@@ -6,7 +6,7 @@ MY Analysis:
     FLOPS = 2 * 4096 ^ 3 = 137 billion GFLOPS
     Time = 47.51 ms
     Performance = 137B / 0.04751 = 2884 GFLOPS
-    This is 226 / 19500 = 14.8% of peak capacity (better than kernel 1)
+    This is 2884 / 19500 = 14.8% of peak capacity (better than kernel 1)
 
 Fixes compared to kernel 1:
 - Better coalescing - 12.5% → 82.5%: Warp threads now access consecutive memory (same row, adjacent columns)
