@@ -1,0 +1,100 @@
+A100 Metrics:
+Compute Limit: 19,500 GFLOPs
+Memory Limit: 2,000 GB/s
+
+MY Analysis:
+    FLOPS = 2 * 4096 ^ 3 = 137 billion GFLOPS
+    Time = 23.81 ms
+    Performance = 137B / 0.02381 = 5,756 GFLOPS
+    This is 5,756 / 19500 = 29.5% of peak capacity (better than kernel 3)
+    Speedup: 1.4x vs Kernel 3
+
+Observations
+- occupancy dropped by half compared to kernel 3. the register array uses more registers and limits how many blocks can fit per SM
+since there is a registers per thread limit as well
+- increased arithmetic intensity compensates for less latency hiding
+- Memory system is less saturated - you're doing more computation per memory access.
+- compute throughput dropped which is not expected since you're doing more work per thread but upon researching, there's fewer warps to hide the latency
+- arithmetic intensity increased which is good!
+
+Things to improve:
+- register constraints is limiting the occupancy (46 registers/thread limits to 2 blocks per SM)
+- still memory bound
+- with lower occupancy, there's less work available to hide latency
+
+Section: GPU Speed Of Light Throughput
+    ----------------------- ----------- ------------
+    Metric Name             Metric Unit Metric Value
+    ----------------------- ----------- ------------
+    DRAM Frequency                  Ghz         1.21
+    SM Frequency                    Mhz       765.00
+    Elapsed Cycles                cycle     18215039
+    Memory Throughput                 %        81.13 (dropped, so better than kernel 3)
+    DRAM Throughput                   %         7.34
+    Duration                         ms        23.81 (less time than kernel 3. seeing an improvement here!)
+    L1/TEX Cache Throughput           %        81.52
+    L2 Cache Throughput               %        14.40
+    SM Active Cycles              cycle  18117881.55
+    Compute (SM) Throughput           %        54.65 (worst than kernel 3)
+    ----------------------- ----------- ------------
+
+    INF   This workload is utilizing greater than 80.0% of the available compute or memory performance of the device.   
+          To further improve performance, work will likely need to be shifted from the most utilized to another unit.   
+          Start by analyzing L1 in the Memory Workload Analysis section.                                                
+
+    Section: Launch Statistics
+    -------------------------------- --------------- ---------------
+    Metric Name                          Metric Unit    Metric Value
+    -------------------------------- --------------- ---------------
+    Block Size                                                   512
+    Function Cache Configuration                     CachePreferNone
+    Grid Size                                                   4096
+    Registers Per Thread             register/thread              46
+    Shared Memory Configuration Size           Kbyte           32.77
+    Driver Shared Memory Per Block       Kbyte/block            1.02
+    Dynamic Shared Memory Per Block       byte/block               0
+    Static Shared Memory Per Block       Kbyte/block            4.10
+    # SMs                                         SM             108
+    Stack Size                                                  1024
+    Threads                                   thread         2097152
+    # TPCs                                                        54
+    Enabled TPC IDs                                              all
+    Uses Green Context                                             0
+    Waves Per SM                                               18.96
+    -------------------------------- --------------- ---------------
+
+    Section: Occupancy
+    ------------------------------- ----------- ------------
+    Metric Name                     Metric Unit Metric Value
+    ------------------------------- ----------- ------------
+    Block Limit SM                        block           32
+    Block Limit Registers                 block            2
+    Block Limit Shared Mem                block            6
+    Block Limit Warps                     block            4
+    Theoretical Active Warps per SM        warp           32
+    Theoretical Occupancy                     %           50
+    Achieved Occupancy                        %        49.38 (way less than kernel 3, almost half!)
+    Achieved Active Warps Per SM           warp        31.60
+    ------------------------------- ----------- ------------
+
+    OPT   Est. Local Speedup: 50%                                                                                       
+          The 8.00 theoretical warps per scheduler this kernel can issue according to its occupancy are below the       
+          hardware maximum of 16. This kernel's theoretical occupancy (50.0%) is limited by the number of required      
+          registers.                                                                                                    
+
+    Section: GPU and Memory Workload Distribution
+    -------------------------- ----------- ------------
+    Metric Name                Metric Unit Metric Value
+    -------------------------- ----------- ------------
+    Average DRAM Active Cycles       cycle   2123393.60
+    Total DRAM Elapsed Cycles        cycle   1157190656
+    Average L1 Active Cycles         cycle  18117881.55
+    Total L1 Elapsed Cycles          cycle   1965988130
+    Average L2 Active Cycles         cycle  17052561.66
+    Total L2 Elapsed Cycles          cycle   1371484000
+    Average SM Active Cycles         cycle  18117881.55
+    Total SM Elapsed Cycles          cycle   1965988130
+    Average SMSP Active Cycles       cycle  18117960.98
+    Total SMSP Elapsed Cycles        cycle   7863952520
+    -------------------------- ----------- ------------
+

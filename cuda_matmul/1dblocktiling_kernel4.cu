@@ -38,7 +38,7 @@ void sgemm_1d_blocktiling(int M, int N, int K, float alpha, const float *A, cons
     B += cCol * BN;
     C += cRow * BM * N + cCol * BN;
 
-    // Thread-local accumulator (in registers!)
+    // Thread-local accumulator (in registers so fast!)
     float threadResults[TM] = {0.0};
 
     // Outer loop: iterate over K dimension in chunks of BK
