@@ -1,0 +1,122 @@
+A100 Metrics:
+Compute Limit: 19,500 GFLOPs
+Memory Limit: 2,000 GB/s
+
+MY Analysis:
+    FLOPS = 2 * 4096 ^ 3 = 137 billion GFLOPS
+    Time = 12.37 ms
+    Performance = 137B / 0.01237 = 11,059 GFLOPS
+    This is 11,059 / 19500 = 56.7% of peak capacity (2x improvement compared to kernel 4, huge jump!)
+    Speedup: 1.92x vs Kernel 4
+
+Key Observations
+- Huge performance jump (2x as fast as kernel 4): each thread now does 64 computations so arithmetic intensity increased significantly
+- IT IS COMPUTE BOUND FOR THE FIRST TIME! NCU OPT states "Compute is more heavily utilized than Memory"
+- occupancy dropped since there is a register limit on number of blocks per SM (each thread now uses more registers)
+- memory system less stressed: less gmem access, better data reuse, caching working well
+- arithmetic intensity calculation: kernel 5 has 2x fewer gmem access, 2.5x fewer smem accesses compared to kernel 4
+- despite less occupancy, matmul is 2x faster because each thread is more productive
+
+Bottleneck identified by NCU
+- my matmul has 1024 blocks and one wave can schedule at most 216 blocks across gpu, total waves = 4.74
+- during the final wave, some SMs sitting idle
+
+Section: GPU Speed Of Light Throughput
+    ----------------------- ----------- ------------
+    Metric Name             Metric Unit Metric Value
+    ----------------------- ----------- ------------
+    DRAM Frequency                  Ghz         1.21
+    SM Frequency                    Ghz         1.09
+    Elapsed Cycles                cycle     13540000
+    Memory Throughput                 %        59.53 (dropped compared to kernel 4)
+    DRAM Throughput                   %         4.32 (even less, fewer gmem accesses)
+    Duration                         ms        12.37 (wayyy faster than kernel 4! half as fast)
+    L1/TEX Cache Throughput           %        62.78
+    L2 Cache Throughput               %         9.59
+    SM Active Cycles              cycle  12816638.01
+    Compute (SM) Throughput           %        75.17 (increased compared to kernel 4, gpu actually computing here)
+    ----------------------- ----------- ------------
+
+    OPT   Compute is more heavily utilized than Memory: Look at the Compute Workload Analysis section to see what the   
+          compute pipelines are spending their time doing. Also, consider whether any computation is redundant and      
+          could be reduced or moved to look-up tables.                                                                  
+
+    Section: Launch Statistics
+    -------------------------------- --------------- ---------------
+    Metric Name                          Metric Unit    Metric Value
+    -------------------------------- --------------- ---------------
+    Block Size                                                   256
+    Function Cache Configuration                     CachePreferNone
+    Grid Size                                                   1024
+    Registers Per Thread             register/thread             123
+    Shared Memory Configuration Size           Kbyte           65.54
+    Driver Shared Memory Per Block       Kbyte/block            1.02
+    Dynamic Shared Memory Per Block       byte/block               0
+    Static Shared Memory Per Block       Kbyte/block            8.19
+    # SMs                                         SM             108
+    Stack Size                                                  1024
+    Threads                                   thread          262144
+    # TPCs                                                        54
+    Enabled TPC IDs                                              all
+    Uses Green Context                                             0
+    Waves Per SM                                                4.74
+    -------------------------------- --------------- ---------------
+
+    OPT   Est. Speedup: 20%                                                                                             
+          A wave of thread blocks is defined as the maximum number of blocks that can be executed in parallel on the    
+          target GPU. The number of blocks in a wave depends on the number of multiprocessors and the theoretical       
+          occupancy of the kernel. This kernel launch results in 4 full waves and a partial wave of 160 thread blocks.  
+          Under the assumption of a uniform execution duration of all thread blocks, this partial wave may account for  
+          up to 20.0% of the total runtime of this kernel. Try launching a grid with no partial wave. The overall       
+          impact of this tail effect also lessens with the number of full waves executed for a grid. See the Hardware   
+          Model (https://docs.nvidia.com/nsight-compute/ProfilingGuide/index.html#metrics-hw-model) description for     
+          more details on launch configurations.                                                                        
+
+    Section: Occupancy
+    ------------------------------- ----------- ------------
+    Metric Name                     Metric Unit Metric Value
+    ------------------------------- ----------- ------------
+    Block Limit SM                        block           32
+    Block Limit Registers                 block            2
+    Block Limit Shared Mem                block            7
+    Block Limit Warps                     block            8
+    Theoretical Active Warps per SM        warp           16
+    Theoretical Occupancy                     %           25
+    Achieved Occupancy                        %        23.77 (dropped, could be due to larger tiles in kernel 5)
+    Achieved Active Warps Per SM           warp        15.21
+    ------------------------------- ----------- ------------
+
+    OPT   Est. Local Speedup: 75%                                                                                       
+          The 4.00 theoretical warps per scheduler this kernel can issue according to its occupancy are below the       
+          hardware maximum of 16. This kernel's theoretical occupancy (25.0%) is limited by the number of required      
+          registers.                                                                                                    
+
+    Section: GPU and Memory Workload Distribution
+    -------------------------- ----------- ------------
+    Metric Name                Metric Unit Metric Value
+    -------------------------- ----------- ------------
+    Average DRAM Active Cycles       cycle    649309.60
+    Total DRAM Elapsed Cycles        cycle    601131008
+    Average L1 Active Cycles         cycle  12816638.01
+    Total L1 Elapsed Cycles          cycle   1459733054
+    Average L2 Active Cycles         cycle   7713870.49
+    Total L2 Elapsed Cycles          cycle   1038203040
+    Average SM Active Cycles         cycle  12816638.01
+    Total SM Elapsed Cycles          cycle   1459733054
+    Average SMSP Active Cycles       cycle  12812843.92
+    Total SMSP Elapsed Cycles        cycle   5838932216
+    -------------------------- ----------- ------------
+
+    OPT   Est. Speedup: 5.032%                                                                                          
+          One or more SMs have a much higher number of active cycles than the average number of active cycles.          
+          Additionally, other SMs have a much lower number of active cycles than the average number of active cycles.   
+          Maximum instance value is 5.31% above the average, while the minimum instance value is 5.06% below the        
+          average.                                                                                                      
+    ----- --------------------------------------------------------------------------------------------------------------
+    OPT   Est. Speedup: 5.032%                                                                                          
+          One or more L1 Slices have a much higher number of active cycles than the average number of active cycles.    
+          Additionally, other L1 Slices have a much lower number of active cycles than the average number of active     
+          cycles. Maximum instance value is 5.31% above the average, while the minimum instance value is 5.06% below    
+          the average.                                                                                                  
+
+ 
