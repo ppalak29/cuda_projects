@@ -1,0 +1,137 @@
+===== Output from running benchmark =====
+=== Matrix Multiply Comparison ===
+Matrix size: 4096 x 4096
+Hardware: A100 (19.5 TFLOPs FP32 peak)
+
+My Kernel 6:
+  Duration: 11.439 ms
+  Performance: 12015.16 GFLOPs
+  % of A100 peak: 61.62%
+
+cuBLAS:
+  Duration: 8.075 ms
+  Performance: 17021.04 GFLOPs
+  % of A100 peak: 87.29%
+
+=== Correctness Check ===
+Max difference: 0.000000
+Results match: YES
+
+=== Performance Gap Analysis ===
+My Kernel: 15430.21 GFLOPs
+cuBLAS:      18895.92 GFLOPs
+Gap:         3465.71 GFLOPs (25.7% slower)
+My kernel is 1.42x slower than cuBLAS
+My kernel if 70.6& of cuBLAS performance
+
+What cuBLAS does better:
+- better occupancy by balancing tile size and arithmetic intensity, more active warps
+- dynamic parameter selection based on tile size
+- double buffering + software pipelining to hide smem loading latency behind computation
+- leveraging warp level optimizations
+- assembly level optimizations
+
+===== Output from ncu profiling =====
+    Section: GPU Speed Of Light Throughput
+    ----------------------- ----------- ------------
+    Metric Name             Metric Unit Metric Value
+    ----------------------- ----------- ------------
+    DRAM Frequency                  Ghz         1.21
+    SM Frequency                    Ghz         1.09
+    Elapsed Cycles                cycle     12522034
+    Memory Throughput                 %        60.29
+    DRAM Throughput                   %         4.67
+    Duration                         ms        11.43
+    L1/TEX Cache Throughput           %        63.69
+    L2 Cache Throughput               %        10.09
+    SM Active Cycles              cycle  11840168.14
+    Compute (SM) Throughput           %        80.30
+    ----------------------- ----------- ------------
+
+    INF   This workload is utilizing greater than 80.0% of the available compute or memory performance of the device.   
+          To further improve performance, work will likely need to be shifted from the most utilized to another unit.   
+          Start by analyzing workloads in the Compute Workload Analysis section.                                        
+
+    Section: Launch Statistics
+    -------------------------------- --------------- ---------------
+    Metric Name                          Metric Unit    Metric Value
+    -------------------------------- --------------- ---------------
+    Block Size                                                   256
+    Function Cache Configuration                     CachePreferNone
+    Grid Size                                                   1024
+    Registers Per Thread             register/thread             102
+    Shared Memory Configuration Size           Kbyte           65.54
+    Driver Shared Memory Per Block       Kbyte/block            1.02
+    Dynamic Shared Memory Per Block       byte/block               0
+    Static Shared Memory Per Block       Kbyte/block            8.19
+    # SMs                                         SM             108
+    Stack Size                                                  1024
+    Threads                                   thread          262144
+    # TPCs                                                        54
+    Enabled TPC IDs                                              all
+    Uses Green Context                                             0
+    Waves Per SM                                                4.74
+    -------------------------------- --------------- ---------------
+
+    OPT   Est. Speedup: 20%                                                                                             
+          A wave of thread blocks is defined as the maximum number of blocks that can be executed in parallel on the    
+          target GPU. The number of blocks in a wave depends on the number of multiprocessors and the theoretical       
+          occupancy of the kernel. This kernel launch results in 4 full waves and a partial wave of 160 thread blocks.  
+          Under the assumption of a uniform execution duration of all thread blocks, this partial wave may account for  
+          up to 20.0% of the total runtime of this kernel. Try launching a grid with no partial wave. The overall       
+          impact of this tail effect also lessens with the number of full waves executed for a grid. See the Hardware   
+          Model (https://docs.nvidia.com/nsight-compute/ProfilingGuide/index.html#metrics-hw-model) description for     
+          more details on launch configurations.                                                                        
+
+    Section: Occupancy
+    ------------------------------- ----------- ------------
+    Metric Name                     Metric Unit Metric Value
+    ------------------------------- ----------- ------------
+    Block Limit SM                        block           32
+    Block Limit Registers                 block            2
+    Block Limit Shared Mem                block            7
+    Block Limit Warps                     block            8
+    Theoretical Active Warps per SM        warp           16
+    Theoretical Occupancy                     %           25
+    Achieved Occupancy                        %        23.77
+    Achieved Active Warps Per SM           warp        15.21
+    ------------------------------- ----------- ------------
+
+    OPT   Est. Local Speedup: 75%                                                                                       
+          The 4.00 theoretical warps per scheduler this kernel can issue according to its occupancy are below the       
+          hardware maximum of 16. This kernel's theoretical occupancy (25.0%) is limited by the number of required      
+          registers.                                                                                                    
+
+    Section: GPU and Memory Workload Distribution
+    -------------------------- ----------- ------------
+    Metric Name                Metric Unit Metric Value
+    -------------------------- ----------- ------------
+    Average DRAM Active Cycles       cycle    648588.80
+    Total DRAM Elapsed Cycles        cycle    555525632
+    Average L1 Active Cycles         cycle  11840168.14
+    Total L1 Elapsed Cycles          cycle   1350930922
+    Average L2 Active Cycles         cycle   9576738.57
+    Total L2 Elapsed Cycles          cycle    959959920
+    Average SM Active Cycles         cycle  11840168.14
+    Total SM Elapsed Cycles          cycle   1350930922
+    Average SMSP Active Cycles       cycle  11843077.37
+    Total SMSP Elapsed Cycles        cycle   5403723688
+    -------------------------- ----------- ------------
+
+    OPT   Est. Speedup: 5.092%                                                                                          
+          One or more SMs have a much higher number of active cycles than the average number of active cycles.          
+          Additionally, other SMs have a much lower number of active cycles than the average number of active cycles.   
+          Maximum instance value is 5.38% above the average, while the minimum instance value is 5.18% below the        
+          average.                                                                                                      
+    ----- --------------------------------------------------------------------------------------------------------------
+    OPT   Est. Speedup: 5.045%                                                                                          
+          One or more SMSPs have a much higher number of active cycles than the average number of active cycles.        
+          Additionally, other SMSPs have a much lower number of active cycles than the average number of active         
+          cycles. Maximum instance value is 5.33% above the average, while the minimum instance value is 5.17% below    
+          the average.                                                                                                  
+    ----- --------------------------------------------------------------------------------------------------------------
+    OPT   Est. Speedup: 5.092%                                                                                          
+          One or more L1 Slices have a much higher number of active cycles than the average number of active cycles.    
+          Additionally, other L1 Slices have a much lower number of active cycles than the average number of active     
+          cycles. Maximum instance value is 5.38% above the average, while the minimum instance value is 5.18% below    
+          the average.                                                                                                  
